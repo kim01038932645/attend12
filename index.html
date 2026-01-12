@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SRT D조 출석부 (2026)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; }
+        .sticky-col { position: sticky; left: 0; background-color: #ffffff; z-index: 10; border-right: 2px solid #e2e8f0; }
+        .table-container::-webkit-scrollbar { height: 8px; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .checked-cell { background-color: #f0fdf4; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-blue-900 mb-2">🏃‍♂️ SRT D조 실시간 출석부</h1>
+            <p class="text-slate-500">2026년 상반기 (1월 - 7월) 수요일/일요일 모임</p>
+        </header>
+
+        <!-- Control Section (Month Filter) -->
+        <div class="flex items-center justify-end mb-4 gap-2">
+            <span class="text-sm font-semibold text-slate-600">월 선택:</span>
+            <select id="monthFilter" class="bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-sm">
+                <option value="0">1월</option>
+                <option value="1">2월</option>
+                <option value="2">3월</option>
+                <option value="3">4월</option>
+                <option value="4">5월</option>
+                <option value="5">6월</option>
+                <option value="6">7월</option>
+            </select>
+        </div>
+
+        <!-- Attendance Table Section -->
+        <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+            <div class="table-container overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-50 border-b border-slate-200">
+                        <tr id="tableHeader">
+                            <th class="sticky-col p-4 font-bold text-slate-700 min-w-[120px]">이름</th>
+                            <!-- Dates will be injected here -->
+                        </tr>
+                    </thead>
+                    <tbody id="attendanceBody" class="divide-y divide-slate-100">
+                        <!-- Members will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <footer class="mt-8 text-center text-slate-400 text-sm">
+            <p>© 2026 SRT D-Group Management System</p>
+            <p class="mt-1">Firebase Realtime Sync Enabled</p>
+        </footer>
+    </div>
+
+    <script>
+        // 1. Configuration (Set your Firebase Config here)
+        const firebaseConfig = {
+  apiKey: "AIzaSyBDmsC0rdd9mLBkGsypSQ-8uNwHUdMq5vo",
+  authDomain: "attend12-397ee.firebaseapp.com",
+  databaseURL: "https://attend12-397ee-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "attend12-397ee",
+  storageBucket: "attend12-397ee.firebasestorage.app",
+  messagingSenderId: "996237586484",
+  appId: "1:996237586484:web:4206689f29b82a773b5a61"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // 2. Data Constants
+        const members = ["강동현", "강동훈", "송채한", "김미화", "김재산", "김찬석", "김한나", "류지찬", "박성환", "박종봉", "소병득", "서정화", "신영섭", "안지훈", "오한천", "이승준", "이용구", "정덕수", "주효석", "서인수", "박창선", "김병식"];
+        
+        // 3. Generate Dates
+        function getMeetingDates(targetMonth) {
+            const dates = [];
+            const start = new Date(2026, targetMonth, 1);
+            const end = new Date(2026, targetMonth + 1, 0);
+            
+            const absoluteEnd = new Date(2026, 6, 31);
+            const actualEnd = end > absoluteEnd ? absoluteEnd : end;
+
+            for (let d = start; d <= actualEnd; d.setDate(d.getDate() + 1)) {
+                if (d.getDay() === 0 || d.getDay() === 3) {
+                    dates.push(new Date(d));
+                }
+            }
+            return dates;
+        }
+
+        // 4. Application Logic
+        let currentMonth = 0;
+        const monthFilter = document.getElementById('monthFilter');
+        const attendanceBody = document.getElementById('attendanceBody');
+        const tableHeader = document.getElementById('tableHeader');
+
+        function initApp() {
+            renderStructure();
+            syncData();
+        }
+
+        function renderStructure() {
+            const dates = getMeetingDates(currentMonth);
+
+            // Render Header
+            tableHeader.innerHTML = '<th class="sticky-col p-4 font-bold text-slate-700 min-w-[120px]">이름</th>';
+            dates.forEach(date => {
+                const dayLabel = date.getDay() === 0 ? '일' : '수';
+                const colorClass = date.getDay() === 0 ? 'text-red-500' : 'text-blue-500';
+                tableHeader.innerHTML += `
+                    <th class="p-4 text-sm font-medium text-slate-600 text-center min-w-[80px]">
+                        ${date.getMonth() + 1}/${date.getDate()}<br>
+                        <span class="${colorClass}">(${dayLabel})</span>
+                    </th>
+                `;
+            });
+            tableHeader.innerHTML += '<th class="p-4 font-bold text-slate-700 text-center bg-slate-50 min-w-[80px]">합계</th>';
+
+            // Render Rows
+            attendanceBody.innerHTML = '';
+            members.forEach(name => {
+                let row = `<tr id="row-${name}">
+                    <td class="sticky-col p-4 font-semibold text-slate-700 border-r border-slate-100">${name}</td>`;
+                
+                dates.forEach(date => {
+                    const dateId = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+                    row += `
+                        <td class="p-0 text-center border-r border-slate-50">
+                            <label class="block p-4 cursor-pointer hover:bg-slate-50 transition-colors">
+                                <input type="checkbox" 
+                                    class="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 transition-all border-slate-300 shadow-sm"
+                                    data-name="${name}" 
+                                    data-date="${dateId}"
+                                    onclick="toggleAttendance('${name}', '${dateId}', this.checked)">
+                            </label>
+                        </td>
+                    `;
+                });
+                
+                row += `<td class="p-4 text-center font-bold text-blue-600 bg-blue-50/30" id="total-${name}">0</td></tr>`;
+                attendanceBody.innerHTML += row;
+            });
+        }
+
+        function toggleAttendance(name, dateId, isChecked) {
+            const path = `attendance/${name}/${dateId}`;
+            if (isChecked) {
+                db.ref(path).set(true);
+            } else {
+                db.ref(path).remove();
+            }
+        }
+
+        function syncData() {
+            db.ref('attendance').on('value', (snapshot) => {
+                const data = snapshot.val() || {};
+                const dates = getMeetingDates(currentMonth);
+
+                members.forEach(name => {
+                    const memberData = data[name] || {};
+                    let monthCount = 0;
+                    
+                    dates.forEach(date => {
+                        const dateId = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+                        const checkbox = document.querySelector(`input[data-name="${name}"][data-date="${dateId}"]`);
+                        if (checkbox) {
+                            const checked = !!memberData[dateId];
+                            checkbox.checked = checked;
+                            checkbox.closest('td').className = checked ? 'p-0 text-center border-r border-slate-50 checked-cell' : 'p-0 text-center border-r border-slate-50';
+                            if (checked) monthCount++;
+                        }
+                    });
+
+                    const totalCell = document.getElementById(`total-${name}`);
+                    if (totalCell) totalCell.innerText = monthCount;
+                });
+            });
+        }
+
+        monthFilter.addEventListener('change', (e) => {
+            currentMonth = parseInt(e.target.value);
+            renderStructure();
+            db.ref('attendance').once('value', () => {}); 
+        });
+
+        initApp();
+    </script>
+</body>
+</html>
